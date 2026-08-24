@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+    command: ["eventforge-api"]
+    environment:
+      EVENTFORGE_DB: /data/eventforge.db
+      EVENTFORGE_HOST: 0.0.0.0
+      EVENTFORGE_PORT: "8000"
+      EVENTFORGE_LOG_LEVEL: INFO
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./.local:/data
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).read()"
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s
+
+  worker:
+    build:
+      context: .
+    command:
+      - eventforge-worker
+      - --db
+      - /data/eventforge.db
+      - --poll-interval
+      - "0.05"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./.local:/data
