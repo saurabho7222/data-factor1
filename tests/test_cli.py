@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eventforge.cli import main
+from eventforge.models import JobRecord
+from eventforge.processing import Worker
 from eventforge.schemas import EventIn
 from eventforge.storage import Database
 from eventforge.worker import run_once
@@ -77,4 +79,35 @@ def test_worker_once_processes_one_job_and_empty_queue_is_safe(tmp_path: Path) -
         )
     )
     assert run_once(database) is True
+    assert database.counts()["projections"] == 1
+
+
+def test_dead_letter_cli_lists_requeues_and_recovers_failed_job(tmp_path: Path, capsys: object) -> None:
+    path = tmp_path / "events.db"
+    database = Database(path)
+    database.initialize()
+    database.ingest(
+        EventIn(
+            tenant_id="acme",
+            source="cli.test",
+            event_type="projection.failed",
+            idempotency_key="cli-deadletter-01",
+            occurred_at=datetime.now(UTC),
+            payload={},
+        )
+    )
+
+    def failing_projector(_database: Database, _job: JobRecord, _now: datetime) -> None:
+        raise RuntimeError("forced failure")
+
+    assert Worker(database, max_attempts=1, projector=failing_projector).process_one() is True
+    assert main(["dead-letters", "--db", str(path), "--tenant", "acme", "--limit", "10"]) == 0
+    dead_letters = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert len(dead_letters) == 1
+    assert dead_letters[0]["last_error"] == "RuntimeError"
+
+    assert main(["retry-failed", "--db", str(path), "--tenant", "acme", "--limit", "10"]) == 0
+    retry_payload = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert retry_payload == {"requeued": 1, "tenant_id": "acme"}
+    assert Worker(database).process_one() is True
     assert database.counts()["projections"] == 1
