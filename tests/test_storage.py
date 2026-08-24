@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eventforge.schemas import EventIn
-from eventforge.storage import Database, SCHEMA_VERSION
+from eventforge.storage import SCHEMA_VERSION, Database
 
 
 def make_event(*, tenant_id: str = "acme", key: str = "order-2026-0001") -> EventIn:
@@ -13,7 +13,7 @@ def make_event(*, tenant_id: str = "acme", key: str = "order-2026-0001") -> Even
         source="checkout.api",
         event_type="order.completed",
         idempotency_key=key,
-        occurred_at=datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc),
+        occurred_at=datetime(2026, 8, 24, 12, 0, tzinfo=UTC),
         payload={"order_id": "o-1", "amount": 42.5},
     )
 

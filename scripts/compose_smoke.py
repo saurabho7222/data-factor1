@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Mapping
 from typing import Any
 
 BASE = "http://127.0.0.1:8000"
@@ -17,7 +18,7 @@ def get_json(path: str) -> Any:
         return json.load(response)
 
 
-def post_json(path: str, payload: dict[str, object]) -> Any:
+def post_json(path: str, payload: Mapping[str, object]) -> Any:
     request = urllib.request.Request(
         BASE + path,
         data=json.dumps(payload).encode("utf-8"),
@@ -53,7 +54,7 @@ def wait_for_projection() -> None:
 
 def main() -> None:
     wait_until_ready()
-    event = {
+    event: dict[str, object] = {
         "tenant_id": "demo",
         "source": "compose.smoke",
         "event_type": "demo.completed",

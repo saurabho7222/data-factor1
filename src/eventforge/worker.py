@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import os
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from .processing import Worker
 from .storage import Database

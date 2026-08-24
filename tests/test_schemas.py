@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
-from eventforge.schemas import AnalyticsFilter, EventIn, MAX_PAYLOAD_BYTES, ReplayRequest
+from eventforge.schemas import MAX_PAYLOAD_BYTES, AnalyticsFilter, EventIn, ReplayRequest
 
 
 def valid_event(**overrides: object) -> EventIn:
@@ -14,7 +14,7 @@ def valid_event(**overrides: object) -> EventIn:
         "source": "checkout.api",
         "event_type": "order.completed",
         "idempotency_key": "order-2026-0001",
-        "occurred_at": datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc),
+        "occurred_at": datetime(2026, 8, 24, 12, 0, tzinfo=UTC),
         "payload": {"order_id": "o-1", "amount": 42.5},
     }
     payload.update(overrides)

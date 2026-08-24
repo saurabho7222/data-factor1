@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eventforge.cli import main
@@ -32,7 +32,7 @@ def test_drain_command_processes_queued_jobs(tmp_path: Path, capsys: object) -> 
             source="sdk.python",
             event_type="user.active",
             idempotency_key="cli-drain-0001",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             payload={},
         )
     )
@@ -52,7 +52,7 @@ def test_replay_command_queues_reprojection(tmp_path: Path, capsys: object) -> N
             source="sdk.python",
             event_type="user.active",
             idempotency_key="cli-replay-0001",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             payload={},
         )
     )
@@ -72,7 +72,7 @@ def test_worker_once_processes_one_job_and_empty_queue_is_safe(tmp_path: Path) -
             source="sdk.python",
             event_type="user.active",
             idempotency_key="worker-once-001",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             payload={},
         )
     )

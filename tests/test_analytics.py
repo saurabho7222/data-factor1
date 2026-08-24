@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from eventforge.analytics import analytics_summary, daily_metrics
@@ -8,7 +8,7 @@ from eventforge.processing import Worker
 from eventforge.schemas import AnalyticsFilter, EventIn
 from eventforge.storage import Database
 
-BASE = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)
+BASE = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
 
 
 def ingest(database: Database, tenant: str, kind: str, day: int, key: str) -> None:

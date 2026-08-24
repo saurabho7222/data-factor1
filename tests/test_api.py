@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -44,7 +44,7 @@ def test_worker_projection_becomes_visible_through_analytics_api(tmp_path: Path)
     client = TestClient(create_app(database_path=path))
     client.post("/v1/events", json=event_payload())
     database = Database(path)
-    assert Worker(database).process_one(now=datetime.now(timezone.utc) + timedelta(seconds=1)) is True
+    assert Worker(database).process_one(now=datetime.now(UTC) + timedelta(seconds=1)) is True
 
     daily = client.get("/v1/analytics/daily", params={"tenant_id": "acme"})
     summary = client.get("/v1/analytics/summary", params={"tenant_id": "acme"})

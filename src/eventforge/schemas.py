@@ -55,7 +55,7 @@ class ReplayRequest(BaseModel):
     limit: int = Field(default=1000, ge=1, le=5000)
 
     @model_validator(mode="after")
-    def validate_range(self) -> "ReplayRequest":
+    def validate_range(self) -> ReplayRequest:
         if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
             raise ValueError("start_date must be on or before end_date")
         return self
@@ -72,7 +72,7 @@ class AnalyticsFilter(BaseModel):
     end_date: date | None = None
 
     @model_validator(mode="after")
-    def validate_range(self) -> "AnalyticsFilter":
+    def validate_range(self) -> AnalyticsFilter:
         if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
             raise ValueError("start_date must be on or before end_date")
         return self
