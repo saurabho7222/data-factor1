@@ -18,12 +18,19 @@ from starlette.responses import Response
 
 from . import __version__
 from .analytics import analytics_summary, daily_metrics
-from .api_models import AnalyticsSummaryResponse, DailyMetricResponse, HealthResponse, IngestResponse, ReplayResponse
+from .api_models import (
+    AnalyticsSummaryResponse,
+    BatchIngestResponse,
+    DailyMetricResponse,
+    HealthResponse,
+    IngestResponse,
+    ReplayResponse,
+)
 from .errors import EventForgeError
 from .logging_utils import configure_json_logging
 from .metrics import Metrics
 from .replay import enqueue_replay
-from .schemas import AnalyticsFilter, EventIn, ReplayRequest
+from .schemas import AnalyticsFilter, EventBatchIn, EventIn, ReplayRequest
 from .security import RequestSizeLimitMiddleware, TenantRateLimiter
 from .storage import SCHEMA_VERSION, Database
 
@@ -86,6 +93,25 @@ def create_app(
         result = database.ingest(event)
         metrics.increment("events_duplicate_total" if result.duplicate else "events_accepted_total")
         return IngestResponse(event_id=result.event_id, duplicate=result.duplicate, queued=result.queued)
+
+    @app.post("/v1/events/batch", response_model=BatchIngestResponse, status_code=status.HTTP_202_ACCEPTED)
+    def ingest_event_batch(batch: EventBatchIn) -> BatchIngestResponse:
+        limiter.check(batch.tenant_id)
+        results = database.ingest_batch(batch.events)
+        accepted = sum(1 for result in results if not result.duplicate)
+        duplicates = sum(1 for result in results if result.duplicate)
+        queued = sum(1 for result in results if result.queued)
+        metrics.increment("events_accepted_total", accepted)
+        metrics.increment("events_duplicate_total", duplicates)
+        return BatchIngestResponse(
+            accepted=accepted,
+            duplicates=duplicates,
+            queued=queued,
+            results=[
+                IngestResponse(event_id=result.event_id, duplicate=result.duplicate, queued=result.queued)
+                for result in results
+            ],
+        )
 
     @app.post("/v1/replays", response_model=ReplayResponse, status_code=status.HTTP_202_ACCEPTED)
     def replay_events(request: ReplayRequest) -> ReplayResponse:

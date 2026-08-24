@@ -12,6 +12,14 @@ class IngestResponse(BaseModel):
     queued: bool
 
 
+class BatchIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    accepted: int
+    duplicates: int
+    queued: int
+    results: list[IngestResponse]
+
+
 class ReplayResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     queued: int

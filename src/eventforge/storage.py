@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -120,52 +120,66 @@ class Database:
             version = connection.execute("SELECT value FROM metadata WHERE key = 'schema_version'").fetchone()
         return result is not None and result[0] == "ok" and version is not None and int(version["value"]) == SCHEMA_VERSION
 
-    def ingest(self, event: EventIn) -> IngestResult:
+    @staticmethod
+    def _insert_event(connection: sqlite3.Connection, event: EventIn, *, now: str) -> IngestResult:
         event_id = str(uuid4())
-        now = self.now().isoformat()
         payload_json = json.dumps(event.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        try:
+            connection.execute(
+                """
+                INSERT INTO events(
+                    event_id, tenant_id, source, event_type, occurred_at,
+                    payload_json, idempotency_key, received_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    event.tenant_id,
+                    event.source,
+                    event.event_type,
+                    event.occurred_at.isoformat(),
+                    payload_json,
+                    event.idempotency_key,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError:
+            existing = connection.execute(
+                "SELECT event_id FROM events WHERE tenant_id = ? AND idempotency_key = ?",
+                (event.tenant_id, event.idempotency_key),
+            ).fetchone()
+            if existing is None:
+                raise
+            return IngestResult(event_id=str(existing["event_id"]), duplicate=True, queued=False)
+
+        connection.execute(
+            """
+            INSERT INTO jobs(
+                event_id, tenant_id, kind, status, attempts, available_at,
+                unique_key, created_at, updated_at
+            ) VALUES (?, ?, 'project', 'pending', 0, ?, ?, ?, ?)
+            """,
+            (event_id, event.tenant_id, now, f"project:{event_id}", now, now),
+        )
+        return IngestResult(event_id=event_id, duplicate=False, queued=True)
+
+    def ingest_batch(self, events: Sequence[EventIn]) -> list[IngestResult]:
+        """Ingest a bounded validated batch in one transaction, preserving input order."""
+        if not events:
+            raise ValueError("ingest_batch requires at least one event")
+        now = self.now().isoformat()
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
-                connection.execute(
-                    """
-                    INSERT INTO events(
-                        event_id, tenant_id, source, event_type, occurred_at,
-                        payload_json, idempotency_key, received_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        event_id,
-                        event.tenant_id,
-                        event.source,
-                        event.event_type,
-                        event.occurred_at.isoformat(),
-                        payload_json,
-                        event.idempotency_key,
-                        now,
-                    ),
-                )
-            except sqlite3.IntegrityError:
-                existing = connection.execute(
-                    "SELECT event_id FROM events WHERE tenant_id = ? AND idempotency_key = ?",
-                    (event.tenant_id, event.idempotency_key),
-                ).fetchone()
+                results = [self._insert_event(connection, event, now=now) for event in events]
+            except Exception:
                 connection.rollback()
-                if existing is None:
-                    raise
-                return IngestResult(event_id=str(existing["event_id"]), duplicate=True, queued=False)
-
-            connection.execute(
-                """
-                INSERT INTO jobs(
-                    event_id, tenant_id, kind, status, attempts, available_at,
-                    unique_key, created_at, updated_at
-                ) VALUES (?, ?, 'project', 'pending', 0, ?, ?, ?, ?)
-                """,
-                (event_id, event.tenant_id, now, f"project:{event_id}", now, now),
-            )
+                raise
             connection.commit()
-        return IngestResult(event_id=event_id, duplicate=False, queued=True)
+        return results
+
+    def ingest(self, event: EventIn) -> IngestResult:
+        return self.ingest_batch([event])[0]
 
     def counts(self) -> dict[str, int]:
         with self.connect() as connection:

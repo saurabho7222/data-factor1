@@ -13,6 +13,7 @@ SourceName = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-
 EventType = Annotated[str, Field(min_length=1, max_length=96, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
 IdempotencyKey = Annotated[str, Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
 MAX_PAYLOAD_BYTES = 65_536
+MAX_BATCH_EVENTS = 100
 
 
 class EventIn(BaseModel):
@@ -41,6 +42,24 @@ class EventIn(BaseModel):
         if len(encoded) > MAX_PAYLOAD_BYTES:
             raise ValueError(f"payload must be <= {MAX_PAYLOAD_BYTES} encoded bytes")
         return value
+
+
+class EventBatchIn(BaseModel):
+    """Bounded single-tenant batch accepted as one storage transaction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    events: list[EventIn] = Field(min_length=1, max_length=MAX_BATCH_EVENTS)
+
+    @model_validator(mode="after")
+    def require_single_tenant(self) -> EventBatchIn:
+        if len({event.tenant_id for event in self.events}) != 1:
+            raise ValueError("all batch events must use the same tenant_id")
+        return self
+
+    @property
+    def tenant_id(self) -> str:
+        return self.events[0].tenant_id
 
 
 class ReplayRequest(BaseModel):
