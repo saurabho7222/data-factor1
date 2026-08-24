@@ -8,6 +8,7 @@ services:
       EVENTFORGE_HOST: 0.0.0.0
       EVENTFORGE_PORT: "8000"
       EVENTFORGE_LOG_LEVEL: INFO
+      EVENTFORGE_AUTH_SECRET: ${EVENTFORGE_AUTH_SECRET:-eventforge-local-development-secret-not-production}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

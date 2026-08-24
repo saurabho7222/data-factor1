@@ -10,6 +10,11 @@ class EventForgeError(Exception):
     http_status = 400
 
 
+class AuthenticationFailed(EventForgeError):
+    code = "authentication_failed"
+    http_status = 401
+
+
 class EventNotFound(EventForgeError):
     code = "event_not_found"
     http_status = 404
