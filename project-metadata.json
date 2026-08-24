@@ -1,0 +1,26 @@
+{
+  "name": "EventForge",
+  "project_type": "backend-service",
+  "category": "application",
+  "domain": "data-engineering",
+  "language": "python",
+  "interfaces": ["http-api", "command-line", "worker"],
+  "service": true,
+  "worker": true,
+  "http_api": true,
+  "database": "embedded-sqlite",
+  "infrastructure_as_code": false,
+  "self_contained": true,
+  "runtime_dependencies": [
+    "fastapi==0.141.1",
+    "pydantic==2.13.4",
+    "uvicorn==0.52.3"
+  ],
+  "runtime_dependency_count": 3,
+  "observability": {
+    "health_endpoint": "/healthz",
+    "readiness_endpoint": "/readyz",
+    "metrics_endpoint": "/metrics",
+    "structured_logging": true
+  }
+}

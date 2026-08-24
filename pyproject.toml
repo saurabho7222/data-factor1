@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eventforge-data-platform"
+version = "0.1.0"
+description = "Durable multi-tenant event ingestion, replayable processing, and analytics backend."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.141.1",
+  "pydantic==2.13.4",
+  "uvicorn==0.52.3",
+]
+keywords = ["backend", "api", "data-engineering", "events", "sqlite", "analytics"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Database",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+[project.scripts]
+eventforge = "eventforge.cli:main"
+eventforge-api = "eventforge.api:main"
+eventforge-worker = "eventforge.worker:main"
+
+[tool.eventforge]
+project_type = "backend-service"
+category = "application"
+domain = "data-engineering"
+service = true
+worker = true
+http_api = true
+infrastructure_as_code = false
+self_contained = true
+database = "embedded-sqlite"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-config --strict-markers"
+
+[tool.coverage.run]
+source = ["eventforge"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+files = ["src/eventforge", "scripts"]
+strict = true
+pretty = true
+show_error_codes = true

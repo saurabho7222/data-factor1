@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.12.0"
+      - name: Verify generated lock
+        run: uv lock --check
+      - name: Frozen runtime sync
+        run: uv sync --frozen
+      - name: Smoke locked entry points
+        run: |
+          uv run eventforge --help
+          uv run python -c "from eventforge.api import create_app; assert callable(create_app)"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Ruff
+        run: ruff check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: |
+          python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+      - name: strict mypy
+        run: mypy src/eventforge scripts
+
+  tests:
+    name: tests-python-${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: |
+          python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+      - name: pytest with coverage gate
+        run: pytest --cov=eventforge --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Build wheel
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+      - name: Install wheel in clean venv
+        run: |
+          python -m venv /tmp/eventforge-package-check
+          /tmp/eventforge-package-check/bin/python -m pip install dist/*.whl
+      - name: Smoke installed commands
+        run: |
+          /tmp/eventforge-package-check/bin/eventforge --help
+          /tmp/eventforge-package-check/bin/eventforge-worker --help
+          /tmp/eventforge-package-check/bin/python -c "from eventforge.api import create_app; assert callable(create_app)"
+
+  docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t eventforge .
+      - name: Run tests inside image
+        run: docker run --rm eventforge python3 -m pytest tests -v
+      - name: Validate Compose model
+        run: docker compose config --quiet
+      - name: Run API and worker end-to-end smoke
+        run: make compose-smoke
