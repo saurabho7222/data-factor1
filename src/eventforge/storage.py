@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 from uuid import uuid4
 
 from .errors import SchemaVersionError, StorageUnavailable
@@ -15,6 +15,7 @@ from .models import IngestResult
 from .schemas import EventIn
 
 SCHEMA_VERSION = 1
+Clock = Callable[[], datetime]
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS metadata (
@@ -64,14 +65,22 @@ CREATE INDEX IF NOT EXISTS idx_projections_analytics
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Database:
-    """Own SQLite connection policy and transactional storage operations."""
+    """Own SQLite connection policy, clock policy, and transactional operations."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, clock: Clock = utc_now) -> None:
         self.path = path
+        self._clock = clock
+
+    def now(self) -> datetime:
+        """Return the authoritative timezone-aware application time."""
+        current = self._clock()
+        if current.tzinfo is None or current.utcoffset() is None:
+            raise ValueError("database clock must return a timezone-aware datetime")
+        return current
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -113,7 +122,7 @@ class Database:
 
     def ingest(self, event: EventIn) -> IngestResult:
         event_id = str(uuid4())
-        now = utc_now().isoformat()
+        now = self.now().isoformat()
         payload_json = json.dumps(event.payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from eventforge.models import JobRecord
@@ -9,7 +9,11 @@ from eventforge.replay import enqueue_replay
 from eventforge.schemas import EventIn, ReplayRequest
 from eventforge.storage import Database
 
-NOW = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+
+
+def database_at(tmp_path: Path) -> Database:
+    return Database(tmp_path / "events.db", clock=lambda: NOW)
 
 
 def event(key: str, *, event_type: str = "order.completed") -> EventIn:
@@ -24,7 +28,7 @@ def event(key: str, *, event_type: str = "order.completed") -> EventIn:
 
 
 def test_worker_claims_projects_and_completes_job(tmp_path: Path) -> None:
-    database = Database(tmp_path / "events.db")
+    database = database_at(tmp_path)
     database.initialize()
     database.ingest(event("event-key-0001"))
     assert Worker(database).process_one(now=NOW + timedelta(seconds=1)) is True
@@ -35,7 +39,7 @@ def test_worker_claims_projects_and_completes_job(tmp_path: Path) -> None:
 
 
 def test_replay_is_idempotent_and_does_not_duplicate_projection(tmp_path: Path) -> None:
-    database = Database(tmp_path / "events.db")
+    database = database_at(tmp_path)
     database.initialize()
     database.ingest(event("event-key-0002"))
     worker = Worker(database)
@@ -49,7 +53,7 @@ def test_replay_is_idempotent_and_does_not_duplicate_projection(tmp_path: Path) 
 
 
 def test_replay_filters_event_type_and_respects_limit(tmp_path: Path) -> None:
-    database = Database(tmp_path / "events.db")
+    database = database_at(tmp_path)
     database.initialize()
     database.ingest(event("event-key-0003", event_type="order.completed"))
     database.ingest(event("event-key-0004", event_type="order.refunded"))
@@ -58,7 +62,7 @@ def test_replay_filters_event_type_and_respects_limit(tmp_path: Path) -> None:
 
 
 def test_worker_retries_failure_with_backoff_then_marks_terminal_failure(tmp_path: Path) -> None:
-    database = Database(tmp_path / "events.db")
+    database = database_at(tmp_path)
     database.initialize()
     database.ingest(event("event-key-0005"))
 
@@ -82,6 +86,23 @@ def test_worker_retries_failure_with_backoff_then_marks_terminal_failure(tmp_pat
 
 
 def test_worker_returns_false_when_queue_has_no_claimable_jobs(tmp_path: Path) -> None:
-    database = Database(tmp_path / "events.db")
+    database = database_at(tmp_path)
     database.initialize()
     assert Worker(database).process_one(now=NOW) is False
+
+
+def test_ingestion_replay_and_worker_share_authoritative_clock(tmp_path: Path) -> None:
+    database = database_at(tmp_path)
+    database.initialize()
+    database.ingest(event("event-key-clock"))
+    with database.connect() as connection:
+        created = connection.execute("SELECT available_at, created_at FROM jobs WHERE kind='project'").fetchone()
+    assert tuple(created) == (NOW.isoformat(), NOW.isoformat())
+
+    assert Worker(database).process_one() is True
+    assert enqueue_replay(database, ReplayRequest(tenant_id="acme")) == 1
+    with database.connect() as connection:
+        replay = connection.execute(
+            "SELECT available_at, created_at FROM jobs WHERE kind='replay' ORDER BY job_id DESC LIMIT 1"
+        ).fetchone()
+    assert tuple(replay) == (NOW.isoformat(), NOW.isoformat())

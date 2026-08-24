@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from .schemas import ReplayRequest
-from .storage import Database, utc_now
+from .storage import Database
 
 
 def enqueue_replay(database: Database, request: ReplayRequest) -> int:
@@ -33,7 +33,7 @@ def enqueue_replay(database: Database, request: ReplayRequest) -> int:
                 request.limit,
             ),
         ).fetchall()
-        now = utc_now().isoformat()
+        now = database.now().isoformat()
         connection.execute("BEGIN IMMEDIATE")
         for row in rows:
             connection.execute(

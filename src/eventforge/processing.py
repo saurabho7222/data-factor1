@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from .models import JobRecord
 from .storage import Database
@@ -12,12 +12,8 @@ from .storage import Database
 Projector = Callable[[Database, JobRecord, datetime], None]
 
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 def claim_next(database: Database, *, now: datetime | None = None) -> JobRecord | None:
-    current = (now or utc_now()).isoformat()
+    current = (now or database.now()).isoformat()
     with database.connect() as connection:
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute(
@@ -137,7 +133,7 @@ class Worker:
         self.projector = projector
 
     def process_one(self, *, now: datetime | None = None) -> bool:
-        current = now or utc_now()
+        current = now or self.database.now()
         job = claim_next(self.database, now=current)
         if job is None:
             return False
