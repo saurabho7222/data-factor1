@@ -25,6 +25,7 @@ class Metrics:
             "events_accepted_total",
             "events_duplicate_total",
             "replay_jobs_queued_total",
+            "dead_letter_jobs_requeued_total",
             "application_errors_total",
         )
         with self._lock:

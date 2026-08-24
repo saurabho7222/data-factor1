@@ -22,15 +22,18 @@ from .api_models import (
     AnalyticsSummaryResponse,
     BatchIngestResponse,
     DailyMetricResponse,
+    DeadLetterResponse,
+    DeadLetterRetryResponse,
     HealthResponse,
     IngestResponse,
     ReplayResponse,
 )
+from .dead_letters import list_dead_letters, retry_dead_letters
 from .errors import EventForgeError
 from .logging_utils import configure_json_logging
 from .metrics import Metrics
 from .replay import enqueue_replay
-from .schemas import AnalyticsFilter, EventBatchIn, EventIn, ReplayRequest
+from .schemas import AnalyticsFilter, DeadLetterFilter, EventBatchIn, EventIn, ReplayRequest
 from .security import RequestSizeLimitMiddleware, TenantRateLimiter
 from .storage import SCHEMA_VERSION, Database
 
@@ -119,6 +122,21 @@ def create_app(
         queued = enqueue_replay(database, request)
         metrics.increment("replay_jobs_queued_total", queued)
         return ReplayResponse(queued=queued)
+
+    @app.get("/v1/dead-letters", response_model=list[DeadLetterResponse])
+    def get_dead_letters(filters: Annotated[DeadLetterFilter, Query()]) -> list[DeadLetterResponse]:
+        limiter.check(filters.tenant_id)
+        return [
+            DeadLetterResponse.model_validate(asdict(row))
+            for row in list_dead_letters(database, tenant_id=filters.tenant_id, limit=filters.limit)
+        ]
+
+    @app.post("/v1/dead-letters/retry", response_model=DeadLetterRetryResponse, status_code=status.HTTP_202_ACCEPTED)
+    def retry_failed_jobs(request: DeadLetterFilter) -> DeadLetterRetryResponse:
+        limiter.check(request.tenant_id)
+        requeued = retry_dead_letters(database, tenant_id=request.tenant_id, limit=request.limit)
+        metrics.increment("dead_letter_jobs_requeued_total", requeued)
+        return DeadLetterRetryResponse(requeued=requeued)
 
     @app.get("/v1/analytics/daily", response_model=list[DailyMetricResponse])
     def get_daily(filters: Annotated[AnalyticsFilter, Query()]) -> list[DailyMetricResponse]:

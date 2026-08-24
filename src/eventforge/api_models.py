@@ -25,6 +25,22 @@ class ReplayResponse(BaseModel):
     queued: int
 
 
+class DeadLetterResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    job_id: int
+    event_id: str
+    tenant_id: str
+    kind: str
+    attempts: int
+    last_error: str | None
+    updated_at: str
+
+
+class DeadLetterRetryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    requeued: int
+
+
 class DailyMetricResponse(BaseModel):
     event_date: str
     event_type: str

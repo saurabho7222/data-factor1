@@ -95,3 +95,12 @@ class AnalyticsFilter(BaseModel):
         if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
             raise ValueError("start_date must be on or before end_date")
         return self
+
+
+class DeadLetterFilter(BaseModel):
+    """Bounded tenant selector for dead-letter inspection or retry."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    tenant_id: TenantId
+    limit: int = Field(default=100, ge=1, le=500)
